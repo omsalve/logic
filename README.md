@@ -16,7 +16,7 @@ All copy lives in `content/`. Components never hold text.
 - `content/site.ts`: hero, facts strip, section titles, principles, contact email
 - `content/team.ts`: members (name, layer, role, bio, focus areas, links)
 
-The names, bios, links and `hello@logic.example` are **placeholders**. Replace them before deploying. The hero network draws one input node per member and is laid out for three.
+The bios, links and `hello@logic.example` are **placeholders**. Replace them before deploying. The hero network draws one input node per member and is laid out for three.
 
 ## Structure
 
