@@ -1,0 +1,59 @@
+/* Both labels share one grid cell, so the button never changes width.
+   They crossfade through a slight blur so the swap reads as one shape morphing. */
+.labels {
+  display: grid;
+}
+
+.idle,
+.done {
+  grid-area: 1 / 1;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition-property: opacity, filter, scale;
+  transition-duration: 200ms;
+  transition-timing-function: var(--curve-out);
+}
+
+.done,
+[data-copied="true"] .idle {
+  opacity: 0;
+  filter: blur(2px);
+  scale: 0.92;
+}
+
+[data-copied="true"] .done {
+  opacity: 1;
+  filter: none;
+  scale: 1;
+}
+
+.done svg {
+  color: var(--signal);
+}
+
+/* The check draws itself as "Copied" lands. Hidden, its dash sits wholly
+   before the path (the 2-unit gap keeps the next dash off the end). Going back,
+   it resets only once the label has faded out. */
+.done path {
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.01;
+  transition: stroke-dashoffset 0s 200ms;
+}
+
+[data-copied="true"] .done path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 300ms var(--curve-out) 60ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idle,
+  .done {
+    transition-property: opacity;
+  }
+
+  .done path {
+    stroke-dasharray: none;
+  }
+}

@@ -1,26 +1,346 @@
 @import "tailwindcss";
 
+/* Grid placement classes are composed from props in components/layout/grid.tsx,
+   so Tailwind can't see them in source — declare them here instead. */
+@source inline("{md:,lg:,}col-span-{1..12}");
+@source inline("{md:,lg:,}col-span-full");
+@source inline("{md:,lg:,}col-start-{1..12}");
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Tokens
+   Raw values live on :root so CSS modules can read them; @theme maps them to
+   Tailwind utilities (bg-canvas, text-fg-muted, border-line, rounded-node…).
+   ───────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --canvas: #05070a;
+  --surface: #0a0d12;
+
+  /* Text — every step passes WCAG AA against --canvas */
+  --fg: #e6eaf0; /* 16.4 : 1 */
+  --fg-muted: #8b95a5; /* 6.7 : 1 */
+  --fg-subtle: #717b8b; /* 4.7 : 1 */
+
+  /* Lines */
+  --line-faint: rgb(255 255 255 / 0.04);
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.14);
+  --mark: #3b414b; /* solid, so overlapping registration marks never darken */
+
+  /* Accent — reserved for signal: focus, live state, the network */
+  --signal: #00d1ff;
+  --signal-glow: rgb(0 209 255 / 0.35);
+
+  /* Motion */
+  --curve-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --curve-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* Shape */
+  --node-radius: 6px;
+
+  /* Grid — 4 columns on mobile, 12 from md */
+  --container: 75rem;
+  --page-gutter: 1.25rem;
+  --grid-cols: 4;
+  --grid-gap: 1rem;
+  --header-h: 3.5rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (width >= 48rem) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --page-gutter: 2rem;
+    --grid-cols: 12;
+    --grid-gap: 1.5rem;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (width >= 80rem) {
+  :root {
+    --page-gutter: 2.5rem;
+  }
+}
+
+/* Only the system's colors exist — no stray zinc-400s. */
+@theme {
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-line-faint: var(--line-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-signal: var(--signal);
+  --color-white: #fff;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --ease-out: var(--curve-out);
+  --ease-in-out: var(--curve-in-out);
+
+  --radius-node: var(--node-radius);
+
+  --text-display: clamp(2.75rem, 1rem + 5vw, 5.25rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.035em;
+  --text-title: clamp(2rem, 1.5rem + 1.6vw, 2.75rem);
+  --text-title--line-height: 1.08;
+  --text-title--letter-spacing: -0.028em;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--line);
+  }
+
+  html {
+    color-scheme: dark;
+    background-color: var(--canvas);
+    scroll-behavior: smooth;
+    /* Anchored sections land with the previous section's closing rule
+       tucked under the header border. */
+    scroll-padding-top: var(--header-h);
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background-color: rgb(0 209 255 / 0.24);
+    color: var(--fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Layout primitives
+   The flow grid separates columns with gutters. The ruled grid reaches half a
+   gutter past the content edge so its cell borders land exactly on the guides
+   drawn by <GridOverlay>; cells pad back in so their text stays on the columns.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@utility page-container {
+  width: 100%;
+  max-width: calc(var(--container) + var(--page-gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+@utility layout-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+  column-gap: var(--grid-gap);
+}
+
+@utility layout-grid-ruled {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
+  margin-inline: calc(var(--grid-gap) / -2);
+}
+
+@utility cell-inset {
+  padding-inline: calc(var(--grid-gap) / 2);
+}
+
+@utility bleed-to-guides {
+  margin-inline: calc(var(--grid-gap) / -2);
+}
+
+/* Crosshairs on all four corners, centred on the 1px borders they mark. */
+@utility registration-marks {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    pointer-events: none;
+    background-image:
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark)),
+      linear-gradient(var(--mark), var(--mark));
+    background-repeat: no-repeat;
+    background-size:
+      11px 1px,
+      1px 11px,
+      11px 1px,
+      1px 11px,
+      11px 1px,
+      1px 11px,
+      11px 1px,
+      1px 11px;
+    background-position:
+      left 0 top 5px,
+      left 5px top 0,
+      right 0 top 5px,
+      right 5px top 0,
+      left 0 bottom 5px,
+      left 5px bottom 0,
+      right 0 bottom 5px,
+      right 5px bottom 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Typography
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* System labels: indices, field names, metadata. */
+@utility mono-label {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Motion
+   Entrances play once per visit on --curve-out. Steps stagger by 70ms;
+   --enter-offset adds finer steps (40ms per word, per grid column).
+   Inside a [data-reveal] region they wait until it scrolls into view.
+   With reduced motion, everything fades in place instead.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes enter-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* From just below its own line box, so a .rise-mask hides it until it moves. */
+@keyframes rise {
+  from {
+    transform: translateY(110%);
+  }
+}
+
+/* Wipes in from the leading edge. --draw-bleed widens the clip so anything drawn
+   just outside the box (registration marks) wipes in with it. */
+@keyframes draw-x {
+  from {
+    clip-path: inset(
+      calc(var(--draw-bleed, 0px) * -1) calc(100% + var(--draw-bleed, 0px))
+        calc(var(--draw-bleed, 0px) * -1) calc(var(--draw-bleed, 0px) * -1)
+    );
+  }
+  to {
+    clip-path: inset(calc(var(--draw-bleed, 0px) * -1));
+  }
+}
+
+@keyframes draw-y {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@utility enter {
+  animation: enter 800ms var(--curve-out) both;
+  animation-delay: calc(var(--enter-step, 0) * 70ms + var(--enter-offset, 0ms) + 60ms);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: enter-fade;
+  }
+}
+
+/* For frames whose lines must not shift off the grid guides. */
+@utility enter-fade {
+  animation: enter-fade 800ms var(--curve-out) both;
+  animation-delay: calc(var(--enter-step, 0) * 70ms + var(--enter-offset, 0ms) + 60ms);
+}
+
+/* Needs a box (block or inline-block) inside a .rise-mask. */
+@utility enter-rise {
+  animation: rise 800ms var(--curve-out) both;
+  animation-delay: calc(var(--enter-step, 0) * 70ms + var(--enter-offset, 0ms) + 60ms);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: enter-fade;
+  }
+}
+
+@utility enter-draw-x {
+  animation: draw-x 800ms var(--curve-out) both;
+  animation-delay: calc(var(--enter-step, 0) * 70ms + var(--enter-offset, 0ms) + 60ms);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: enter-fade;
+  }
+}
+
+@utility enter-draw-y {
+  animation: draw-y 800ms var(--curve-out) both;
+  animation-delay: calc(var(--enter-step, 0) * 70ms + var(--enter-offset, 0ms) + 60ms);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-name: enter-fade;
+  }
+}
+
+@utility enter-step-* {
+  --enter-step: --value(integer);
+}
+
+/* Clips a word so .enter-rise can rise from behind it. The padding leaves room
+   for descenders and overhanging glyphs; the negative margin gives it back, and
+   top alignment stops the clipped box from moving the baseline. */
+@utility rise-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  padding: 0 0.05em 0.1em;
+  margin: 0 -0.05em -0.1em;
+}
+
+/* Entrances inside a [data-reveal] region hold their first frame until
+   <RevealObserver> marks it in view. Important, so no component's animation
+   shorthand can release it early. Without scripting they simply play. */
+@media (scripting: enabled) {
+  [data-reveal]:not([data-inview]),
+  [data-reveal]:not([data-inview])::before,
+  [data-reveal]:not([data-inview])::after,
+  [data-reveal]:not([data-inview]) *,
+  [data-reveal]:not([data-inview]) *::before,
+  [data-reveal]:not([data-inview]) *::after {
+    animation-play-state: paused !important;
+  }
 }

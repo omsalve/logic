@@ -1,0 +1,21 @@
+.node {
+  position: relative;
+  isolation: isolate; /* lets the <Spotlight> sit above the fill but under the content */
+  border: 1px solid var(--line);
+  border-radius: var(--node-radius);
+  background-color: var(--surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.03);
+  transition-property: border-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .node:hover {
+    border-color: rgb(0 209 255 / 0.3);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.03),
+      0 0 0 3px rgb(0 209 255 / 0.05),
+      0 12px 40px -16px var(--signal-glow);
+  }
+}

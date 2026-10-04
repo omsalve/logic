@@ -1,0 +1,125 @@
+/*
+  The team is a chain of nodes, stacked at every width (from lg it fills the
+  section's half of the page). Each card has ports on its top and bottom edges
+  and a wire runs down through the gutter to the next card. Ports and wires are
+  offset so their centres fall on the 1px card borders, keeping every line on
+  whole pixels.
+
+  As a node scrolls into view its card enters, then at --chain-at a signal
+  arrives (the in-port pings) and leaves (the out-port lights, the wire draws).
+  Each node is revealed on its own, so the beat starts from its own entrance.
+*/
+
+.link {
+  --chain-at: 400ms;
+
+  position: relative;
+}
+
+.port {
+  position: absolute;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--port-color, var(--line-strong));
+  border-radius: 50%;
+  background-color: var(--port-fill, var(--canvas));
+  box-shadow: var(--port-glow, none);
+  transition-property: border-color, background-color, box-shadow;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+  animation: fade-in 200ms var(--curve-out) var(--chain-at) both;
+}
+
+/* The arriving signal: a ring that leaves the in-port and dissolves. */
+.in::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--signal);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ping 700ms var(--curve-out) var(--chain-at) both;
+}
+
+.in {
+  top: -3px;
+  left: calc(50% - 3px);
+}
+
+.out {
+  bottom: -3px;
+  left: calc(50% - 3px);
+}
+
+/* The wire to the next node, under the ports. */
+.link:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: var(--grid-gap);
+  background-color: var(--wire-color, var(--line-strong));
+  transition: background-color 200ms ease;
+  animation: wire-down 500ms var(--curve-out) calc(var(--chain-at) + 50ms) both;
+}
+
+/* Pointing at a node lights it, its wires, and the ports at their far ends. */
+@media (hover: hover) and (pointer: fine) {
+  .link:hover .port,
+  .link:hover + .link .in,
+  .link:has(+ .link:hover) .out {
+    --port-color: var(--signal);
+    --port-fill: color-mix(in oklab, var(--signal) 30%, var(--canvas));
+    --port-glow: 0 0 10px var(--signal-glow);
+  }
+
+  .link:hover::after,
+  .link:has(+ .link:hover)::after {
+    --wire-color: rgb(0 209 255 / 0.6);
+  }
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ping {
+  0% {
+    opacity: 0;
+    scale: 1;
+  }
+  20% {
+    opacity: 1;
+    scale: 1.3;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
+  }
+}
+
+@keyframes wire-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+
+/* Reduced motion: wires fade in place; no ping. */
+@media (prefers-reduced-motion: reduce) {
+  .link:not(:last-child)::after {
+    animation-name: fade-in;
+  }
+
+  .in::after {
+    display: none;
+  }
+}

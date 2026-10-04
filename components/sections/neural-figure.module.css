@@ -1,0 +1,314 @@
+/*
+  Timeline, from when the figure scrolls into view (plays once, then idles):
+    0ms     input nodes appear
+    120ms   input → hidden edges draw
+    420ms   hidden nodes appear
+    520ms   hidden → output edges draw
+    900ms   output node appears
+    1.6s    signals begin — route k at 1.6s + k × 3s, each repeating every 9s
+
+  Within a route's 9s cycle (its signal eases on --curve-in-out over 0–18%):
+    0–5.3%    the input charges; the signal's head leaves it at 0.48s
+    ~8.9%     the signal crosses its hidden node at 0.8s, which flashes
+    18%       the signal lands on the output at 1.62s; the output ripples
+  Times solved from the curve and the path geometry; the three routes differ by <15ms.
+*/
+
+.figure {
+  margin: 0;
+}
+
+.frame {
+  --corner: 12px;
+  --corner-color: rgb(255 255 255 / 0.24);
+
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background-color: var(--canvas);
+  /* Corner brackets: a horizontal and a vertical arm per corner. */
+  background-image:
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color)),
+    linear-gradient(var(--corner-color), var(--corner-color));
+  background-repeat: no-repeat;
+  background-size:
+    var(--corner) 1px,
+    1px var(--corner),
+    var(--corner) 1px,
+    1px var(--corner),
+    var(--corner) 1px,
+    1px var(--corner),
+    var(--corner) 1px,
+    1px var(--corner);
+  background-position:
+    top left,
+    top left,
+    top right,
+    top right,
+    bottom left,
+    bottom left,
+    bottom right,
+    bottom right;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The lattice every node sits on, fading out toward the frame. */
+.lattice {
+  color: rgb(255 255 255 / 0.16);
+  mask-image: radial-gradient(ellipse 65% 65% at 50% 50%, #000 35%, transparent 100%);
+}
+
+/* ── Edges ──────────────────────────────────────────────────────────────── */
+
+.edges path {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.1);
+  stroke-width: 1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 800ms var(--curve-out) forwards;
+}
+
+.edges path[data-layer="1"] {
+  animation-delay: 120ms;
+}
+
+.edges path[data-layer="2"] {
+  animation-delay: 520ms;
+}
+
+/* ── Nodes ──────────────────────────────────────────────────────────────── */
+
+.hidden circle {
+  fill: var(--canvas);
+  stroke: rgb(255 255 255 / 0.32);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-in 500ms var(--curve-out) 420ms both;
+}
+
+/* HTML nodes are placed in SVG units via --x / --y percentages. */
+.placed {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  translate: -50% -50%;
+}
+
+.input {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background-color: var(--surface);
+  color: var(--fg);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  animation: node-in 500ms var(--curve-out) both;
+}
+
+.output {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--signal);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--signal) 0 2.5px, var(--canvas) 3px);
+  box-shadow:
+    0 0 0 4px rgb(0 209 255 / 0.08),
+    0 0 24px var(--signal-glow);
+  animation: node-in 500ms var(--curve-out) 900ms both;
+}
+
+/* A ripple each time a signal lands: 1.62s into every 3s beat. */
+.output::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 1px solid var(--signal);
+  border-radius: 50%;
+  opacity: 0;
+  animation: ripple 3s ease-out 1.6s infinite;
+}
+
+.label {
+  white-space: nowrap;
+  animation: fade-in 600ms ease 900ms both;
+}
+
+/* ── Signals ────────────────────────────────────────────────────────────── */
+
+/* With pathLength=1, a 0.08 dash travels from before the start (offset 0.13)
+   to rest against the output (offset -0.92), then fades in place. */
+.signal {
+  opacity: 0;
+  stroke-dasharray: 0.08 1.2;
+  stroke-dashoffset: 0.13;
+  animation: signal 9s var(--curve-in-out) infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+.signal path {
+  fill: none;
+  stroke: var(--signal);
+  stroke-linecap: round;
+}
+
+.halo {
+  stroke-width: 5;
+  stroke-opacity: 0.18;
+}
+
+.core {
+  stroke-width: 1.5;
+}
+
+/* ── Firing ─────────────────────────────────────────────────────────────── */
+
+/* The input lights as its signal builds, peaking as the signal leaves. */
+.charge {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--signal);
+  border-radius: 5px;
+  box-shadow:
+    0 0 14px var(--signal-glow),
+    inset 0 0 10px rgb(0 209 255 / 0.12);
+  opacity: 0;
+  animation: charge 9s linear infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+/* A flash on the hidden node as the signal passes through it. */
+.pass {
+  opacity: 0;
+  animation: pass 9s linear infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+.pass circle {
+  fill: var(--signal);
+}
+
+.pass circle:first-child {
+  fill-opacity: 0.16;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes node-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes signal {
+  0% {
+    opacity: 1;
+    stroke-dashoffset: 0.13;
+  }
+  18% {
+    opacity: 1;
+    stroke-dashoffset: -0.92;
+  }
+  23%,
+  100% {
+    opacity: 0;
+    stroke-dashoffset: -0.92;
+  }
+}
+
+@keyframes charge {
+  0% {
+    opacity: 0;
+  }
+  5.3% {
+    opacity: 1;
+    animation-timing-function: var(--curve-out);
+  }
+  14%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pass {
+  0%,
+  8% {
+    opacity: 0;
+  }
+  8.9% {
+    opacity: 1;
+    animation-timing-function: var(--curve-out);
+  }
+  15%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ripple {
+  0%,
+  50% {
+    opacity: 0;
+    scale: 0.6;
+  }
+  56% {
+    opacity: 0.9;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.8;
+  }
+}
+
+/* Reduced motion: the network fades in whole; no drawing, no signals. */
+@media (prefers-reduced-motion: reduce) {
+  .edges path {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: fade-in 600ms ease both;
+  }
+
+  .hidden circle,
+  .input,
+  .output {
+    animation-name: fade-in;
+  }
+
+  .signal,
+  .charge,
+  .pass,
+  .output::after {
+    display: none;
+  }
+}

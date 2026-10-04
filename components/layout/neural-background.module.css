@@ -1,0 +1,418 @@
+/*
+  The hero figure's timeline, unchanged. From page load:
+    0ms     input nodes appear; the network begins turning (one turn per 36s)
+    120ms   input → hidden edges draw
+    420ms   hidden nodes appear
+    520ms   hidden → output edges draw
+    900ms   output node appears
+    1.6s    signals begin — route k at 1.6s + k × 3s, each repeating every 9s
+
+  Within a route's 9s cycle (its signal eases on --curve-in-out over 0–18%):
+    0–5.3%    the input charges as the signal builds and leaves it
+    ~8.9%     the signal crosses its hidden node at 0.8s, which flashes
+    18%       the signal lands on the output at 1.62s; the output ripples
+  The crossing is solved along each route in 3D, so it holds whichever way the
+  network faces.
+
+  A click replays the same keyframes once on a spark — a spare signal, charge,
+  pass and ripple that wait paused at their first frame until then.
+
+  Spin and signal progress are registered properties so they interpolate, and
+  so <NeuralBackground> can read them back each frame to reproject the scene.
+*/
+
+@property --neural-spin {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --neural-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* Fixed behind the page; the stage is placed within it. */
+.background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  container-type: size;
+}
+
+/* Below lg the network sits behind the copy, wide and quiet, and recedes past
+   the hero (--recede, 0 → 1 over the first 80% of a screen): it dims, and its
+   initials fade, so only the structure and its signals stay behind the text.
+   Its labels belong to the hero and fade at every size.
+   Mid-crossing (--dip peaks at 1) it dims further as it passes behind the copy. */
+.stage {
+  --presence: 0.38;
+  --recede-by: 0.62;
+  --initials: calc(1 - var(--recede, 0));
+
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  width: max(110cqw, 30rem);
+  aspect-ratio: 4 / 3;
+  translate: -50% -50%;
+  /* Nodes are placed in cqw, which tracks the SVG's scale. */
+  container-type: inline-size;
+  opacity: calc(var(--presence) * (1 - var(--recede, 0) * var(--recede-by)) * (1 - var(--dip, 0) * 0.5));
+}
+
+/* Turns once per 36s. An empty element carries the spin, so animating it
+   restyles nothing else; the component reads it back each frame. */
+.clock {
+  position: absolute;
+  animation: spin 36s linear infinite;
+}
+
+/* From lg the network keeps to the open half beside each section, so it stays
+   near full strength. It has two berths, each reaching past the page
+   container's edge into the margin beside the output (never past the screen's);
+   --u (0 → 1) carries it from the right berth to the left. */
+@media (width >= 64rem) {
+  .stage {
+    --presence: 1;
+    --recede-by: 0.2;
+    --initials: 1;
+    --berth: max(0px, (100cqw - min(100cqw, var(--container) + var(--page-gutter) * 2)) / 2 - 3.5rem);
+    --size: min(46cqw, 100cqh * 4 / 3, 46rem);
+
+    top: calc(var(--header-h) + (100cqh - var(--header-h)) * 0.46);
+    left: 0;
+    width: var(--size);
+    translate:
+      calc(
+        (100cqw - var(--berth) - var(--size)) * (1 - var(--u, 0)) + var(--berth) * var(--u, 0)
+      )
+      -50%;
+  }
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The floor the network turns above; its rings fade toward the rim. */
+.floor path {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.16);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* ── Edges ──────────────────────────────────────────────────────────────── */
+
+/* --glow lifts the edges of a node the cursor nears. */
+.edges path {
+  fill: none;
+  stroke: color-mix(in oklab, var(--signal) calc(var(--glow, 0) * 14%), rgb(255 255 255 / 0.1));
+  stroke-width: 1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 800ms var(--curve-out) forwards;
+}
+
+.edges path[data-layer="1"] {
+  animation-delay: 120ms;
+}
+
+.edges path[data-layer="2"] {
+  animation-delay: 520ms;
+}
+
+/* ── Nodes ──────────────────────────────────────────────────────────────── */
+
+/* --near (0 → 1) lights a node as the cursor approaches. */
+.hidden circle {
+  fill: var(--canvas);
+  stroke: color-mix(in oklab, var(--signal) calc(var(--near, 0) * 70%), rgb(255 255 255 / 0.32));
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-in 500ms var(--curve-out) 420ms both;
+}
+
+/* HTML nodes are placed in SVG units via --x / --y, then sized for depth. */
+.placed {
+  position: absolute;
+  top: 0;
+  left: 0;
+  translate: calc(var(--x) - 50%) calc(var(--y) - 50%);
+  transform: scale(var(--depth, 1));
+}
+
+.input {
+  display: grid;
+  place-items: center;
+  width: clamp(30px, 6.25cqw, 40px);
+  height: clamp(30px, 6.25cqw, 40px);
+  border: 1px solid color-mix(in oklab, var(--signal) calc(var(--near, 0) * 60%), var(--line-strong));
+  border-radius: 5px;
+  background-color: var(--surface);
+  box-shadow: 0 0 calc(var(--near, 0) * 18px) rgb(0 209 255 / calc(var(--near, 0) * 0.3));
+  color: color-mix(in oklab, var(--fg) calc(var(--initials) * 100%), transparent);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: clamp(10px, 2.1cqw, 13px);
+  letter-spacing: 0.04em;
+  filter: brightness(var(--shade, 1));
+  animation: node-in 500ms var(--curve-out) both;
+}
+
+.output {
+  z-index: 10;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--signal);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--signal) 0 2.5px, var(--canvas) 3px);
+  box-shadow:
+    0 0 0 calc(4px + var(--near, 0) * 3px) rgb(0 209 255 / 0.08),
+    0 0 calc(24px + var(--near, 0) * 16px) var(--signal-glow);
+  animation: node-in 500ms var(--curve-out) 900ms both;
+}
+
+/* A ripple each time a signal lands: 1.62s into every 3s beat, and after each spark. */
+.output::after,
+.burst {
+  position: absolute;
+  inset: -6px;
+  border: 1px solid var(--signal);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.output::after {
+  content: "";
+  animation: ripple 3s ease-out 1.6s infinite;
+}
+
+.burst {
+  animation: ripple 3s ease-out paused;
+}
+
+/* Filtered rather than faded, so the entrance keeps the opacity channel.
+   Below lg the network sits behind the copy, so it goes unlabelled. They clear
+   out of the way of a crossing too, where the layers line up behind each other. */
+.label {
+  display: none;
+  white-space: nowrap;
+  filter: opacity(calc((1 - var(--recede, 0)) * (1 - var(--dip, 0))));
+  animation: fade-in 600ms ease 900ms both;
+}
+
+@media (width >= 64rem) {
+  .label {
+    display: block;
+  }
+}
+
+/* ── Signals ────────────────────────────────────────────────────────────── */
+
+/* --neural-progress carries the signal from the input to rest against the
+   output; the component draws it there, then it fades in place. */
+.signal,
+.sparkSignal {
+  opacity: 0;
+}
+
+.signal {
+  animation: signal 9s var(--curve-in-out) infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+.sparkSignal {
+  animation: signal 9s var(--curve-in-out) paused;
+}
+
+:is(.signal, .sparkSignal) path {
+  fill: none;
+  stroke: var(--signal);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.halo {
+  stroke-width: 5;
+  stroke-opacity: 0.18;
+}
+
+.core {
+  stroke-width: 1.5;
+}
+
+/* ── Firing ─────────────────────────────────────────────────────────────── */
+
+/* The input lights as its signal builds, peaking as the signal leaves. */
+.charge,
+.sparkCharge {
+  width: clamp(30px, 6.25cqw, 40px);
+  height: clamp(30px, 6.25cqw, 40px);
+  border: 1px solid var(--signal);
+  border-radius: 5px;
+  box-shadow:
+    0 0 14px var(--signal-glow),
+    inset 0 0 10px rgb(0 209 255 / 0.12);
+  filter: brightness(var(--shade, 1));
+  opacity: 0;
+}
+
+.charge {
+  animation: charge 9s linear infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+.sparkCharge {
+  animation: charge 9s linear paused;
+}
+
+/* A flash on the hidden node as the signal passes through it. */
+.pass,
+.sparkPass {
+  opacity: 0;
+}
+
+.pass {
+  animation: pass 9s linear infinite;
+  animation-delay: calc(1.6s + var(--route) * 3s);
+}
+
+.sparkPass {
+  animation: pass 9s linear paused;
+}
+
+:is(.pass, .sparkPass) circle {
+  fill: var(--signal);
+}
+
+:is(.pass, .sparkPass) circle:first-child {
+  fill-opacity: 0.16;
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  to {
+    --neural-spin: 1;
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes node-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes signal {
+  0% {
+    opacity: 1;
+    --neural-progress: 0;
+  }
+  18% {
+    opacity: 1;
+    --neural-progress: 1;
+  }
+  23%,
+  100% {
+    opacity: 0;
+    --neural-progress: 1;
+  }
+}
+
+@keyframes charge {
+  0% {
+    opacity: 0;
+  }
+  5.3% {
+    opacity: 1;
+    animation-timing-function: var(--curve-out);
+  }
+  14%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pass {
+  0%,
+  8% {
+    opacity: 0;
+  }
+  8.9% {
+    opacity: 1;
+    animation-timing-function: var(--curve-out);
+  }
+  15%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ripple {
+  0%,
+  50% {
+    opacity: 0;
+    scale: 0.6;
+  }
+  56% {
+    opacity: 0.9;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.8;
+  }
+}
+
+/* Reduced motion: the network fades in whole and holds still; no drawing, no
+   signals. The cursor still lights nodes, and scrolling still dims it. */
+@media (prefers-reduced-motion: reduce) {
+  .clock {
+    animation: none;
+  }
+
+  .edges path {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: fade-in 600ms ease both;
+  }
+
+  .hidden circle,
+  .input,
+  .output {
+    animation-name: fade-in;
+  }
+
+  .signal,
+  .sparkSignal,
+  .charge,
+  .sparkCharge,
+  .pass,
+  .sparkPass,
+  .output::after,
+  .burst {
+    display: none;
+  }
+}
